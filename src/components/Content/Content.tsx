@@ -1,53 +1,34 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { useAccount, useConnect, useBalance } from 'wagmi'
-import { GetBalanceReturnType, watchBlockNumber } from 'wagmi/actions'
-import { Button, Col, Header, Image, Row, Text } from '../Basic'
-import { RowBalance, Body, Container, TextBalance } from './styles'
+import { useEffect, useMemo, useState } from 'react'
+import { useAccount, useConnect, useBalance, useReadContract, useWriteContract } from 'wagmi'
+import { watchBlockNumber } from 'wagmi/actions'
+import { Button as ButtonBase, Header, Input, Image, Row, Spacer, Text } from '../Basic'
+import { Button, RowBalance, Body, Container, TextBalance, RowButtonInput, TextError } from './styles'
 
-import { disconnect, getChains, getBalance, getChainId, switchChain } from '@wagmi/core'
+import { disconnect, getChains, getChainId, switchChain, sendTransaction, simulateContract } from '@wagmi/core'
+import { parseEther, formatEther } from 'viem'
 
 import { injected } from 'wagmi/connectors'
 
 import metamaskLogo from '../../../public/metamask-fox.png'
+import sepoliaLogo from '../../../public/sepolia.png'
 import './styles1.css'
 import { config } from '../../config'
 import { ChainSwitcher } from '../ChainSwitcher/ChainSwitcher'
+import { CONTRACT_ADDRESS, CONTRACT_ABI } from '../../consts/contract'
 
 export function Content() {
-  const [amountSent, setAmountSent] = useState(0)
-  const [amountWithdraw, setAmountWithdraw] = useState(0)
-  const [balance, setBalance] = useState<GetBalanceReturnType>()
-  const [contract, setContract] = useState(null)
-  const [contractOwner, setContractOwner] = useState(null)
-  const [contractBalance, setContractBalance] = useState(null)
-  const [isOwner, setIsOwner] = useState(false)
-  const [network, setNetwork] = useState(null)
-  const [signer, setSigner] = useState(null)
-
   const chains = getChains(config)
   const chainId = getChainId(config)
+  const [inEth, setInEth] = useState('')
+  const [outEth, setOutEth] = useState('')
+  const [inEthError, setInEthError] = useState('')
+  const [outEthError, setOutEthError] = useState('')
 
   const { address } = useAccount()
   const { connect } = useConnect()
 
-  useEffect(() => {
-    const fetchBalance = async () => {
-      try {
-        if (address) {
-          const balanceResult = await getBalance(config, { address })
-          setBalance(balanceResult)
-        }
-      } catch (error) {
-        console.error('LOG: Error fetching balance:', error)
-      }
-    }
-
-    fetchBalance()
-  }, [address])
-
-  console.log('***address', address)
-  console.log('***chains', chains)
-  console.log('***balance', balance)
+  const { data: balance } = useBalance({ address })
+  const { writeContract } = useWriteContract()
 
   useEffect(() => {
     return watchBlockNumber(config, {
@@ -56,6 +37,20 @@ export function Content() {
       }
     })
   }, [])
+
+  const { data: balanceContract } = useReadContract({
+    address: CONTRACT_ADDRESS as `0x${string}`,
+    abi: CONTRACT_ABI,
+    functionName: 'getBalance',
+    args: []
+  })
+
+  const { data: contractOwner } = useReadContract({
+    address: CONTRACT_ADDRESS as `0x${string}`,
+    abi: CONTRACT_ABI,
+    functionName: 'owner',
+    args: []
+  })
 
   const availableChains = useMemo(() => {
     return chains.map((item) => {
@@ -69,7 +64,6 @@ export function Content() {
   const onChangeChain = async (id: number) => {
     try {
       await switchChain(config, { chainId: id as 1 | 11155111 })
-      console.log('LOG: Chain changed to', id)
     } catch (error) {
       console.error('LOG: Error switching chain:', error)
     }
@@ -81,20 +75,50 @@ export function Content() {
     }
   }
 
-  const switchNetwork = () => {}
   const disconnectWallet = async () => {
     await disconnect(config)
   }
-  const checkBalance = () => {}
-  const checkIsOwner = () => {}
-  const checkContractOwner = () => {}
-  const sendMoneyToContract = () => {}
-  const withdrawMoneyFromContract = () => {}
-  const onChangeAmountInEth = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setAmountSent(e.target.value)
+
+  const withdrawEthFromContract = async () => {
+    try {
+      const { request } = await simulateContract(config, {
+        abi: CONTRACT_ABI,
+        address: CONTRACT_ADDRESS,
+        functionName: 'withdraw',
+        args: [address, parseEther(inEth)]
+      })
+
+      const hash = writeContract(config, request)
+      console.log('hash', hash)
+
+      setInEth('')
+    } catch (error) {
+      setInEthError('Error withdrawing ETH')
+      console.error('Error withdrawing ETH:', error)
+    }
   }
-  const onChangeWithdrawAmount = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setAmountWithdraw(e.target.value)
+
+  const sendEthToContract = async () => {
+    try {
+      await sendTransaction(config, {
+        to: CONTRACT_ADDRESS,
+        value: parseEther(outEth)
+      })
+      setOutEth('')
+    } catch (error) {
+      setOutEthError('Error sending ETH')
+      console.error('Error sending ETH:', error)
+    }
+  }
+
+  const onChangeOutEth = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setOutEthError('')
+    setOutEth(e.target.value)
+  }
+
+  const onChangeInEth = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInEthError('')
+    setInEth(e.target.value)
   }
 
   return (
@@ -105,110 +129,56 @@ export function Content() {
           <Header text="MetaMask" />
         </Row>
         <RowBalance>
-          <Button buttonType="primary" onClick={connectWallet} disabled={!!address}>
+          <ButtonBase buttonType="primary" onClick={connectWallet} disabled={!!address}>
             {!!address ? `Connected: ${address.substring(0, 6)}...${address.substring(38)}` : 'Connect Wallet'}
-          </Button>
-          <TextBalance>{`Balance: ${balance ? balance.formatted : 0} ${balance?.symbol ?? ''}`}</TextBalance>
+          </ButtonBase>
+          {!!balance && (
+            <TextBalance>{`Balance: ${balance ? balance.formatted : 0} ${balance?.symbol ?? ''}`}</TextBalance>
+          )}
         </RowBalance>
-        <ChainSwitcher availableChains={availableChains} activeChainId={chainId} onChangeChain={onChangeChain} />
-      </Container>
-      {/* <nav className="navbar">
-        <div className="container">
-          <div className="title-container">
-            <img src={metamaskLogo} alt="MetaMask Fox" className="metamask-logo" />
-            <h1 className="navbar-item is-size-4">{'MetaMask:'}</h1>
-          </div>
-
-          <RowBalance>
-            <Button buttonType="primary" onClick={connectWallet} disabled={!!address}>
-              {!!address ? `Connected: ${address.substring(0, 6)}...${address.substring(38)}` : 'Connect Wallet'}
+        {!!address && (
+          <ChainSwitcher availableChains={availableChains} activeChainId={chainId} onChangeChain={onChangeChain} />
+        )}
+        <Spacer height={10} />
+        {!!address && (
+          <RowButtonInput>
+            <Button buttonType="primary" onClick={sendEthToContract}>
+              {'Sent ETH'}
             </Button>
-            <Text>Balance</Text>
-          </RowBalance>
-
-          <div id="navbarMenu" className="navbar-menu">
-            <div className="row">
-              {!!balance && (
-                <div className="balance-box">
-                  <span className="is-link has-text-weight-bold">{`Balance: ${balance}`}</span>
-                </div>
-              )}
-            </div>
-
-            {!!network?.name && (
-              <div className="navbar-end is-align-items-center mt-10">
-                <button className="button is-white connect-wallet button-container" onClick={switchNetwork}>
-                  <span className="is-link has-text-weight-bold">{`Network: ${network?.name}`}</span>
-                </button>
-              </div>
-            )}
-          </div>
-
-          {!!address && (
-            <div className="row">
-              <button className="button is-white connect-wallet mt-10 button-container" onClick={disconnectWallet}>
-                <span className="is-link has-text-weight-bold">{'Disconnect'}</span>
-              </button>
-            </div>
-          )}
-        </div>
-      </nav>
-      <nav className="navbar">
-        <div className="container">
-          <div className="navbar-brand">
-            <h1 className="navbar-item is-size-4">{'Test Sepolia contract:'}</h1>
-          </div>
-        </div>
-
-        <div className="row">
-          <div className="navbar-end is-align-items-center">
-            <button className="button is-white connect-wallet button-container" onClick={checkBalance}>
-              <span className="is-link has-text-weight-bold">{'Check Balance'}</span>
-            </button>
-          </div>
-          {!!contractBalance && (
-            <div className="balance-box">
-              <span className="is-link has-text-weight-bold">{`Balance: ${contractBalance}`}</span>
-            </div>
-          )}
-        </div>
-
-        <div className="row mt-5">
-          <div className="navbar-end is-align-items-center">
-            <button className="button is-white connect-wallet button-container" onClick={checkIsOwner}>
-              <span className="is-link has-text-weight-bold">{'Check Is Owner'}</span>
-            </button>
-          </div>
-          <div className="balance-box">
-            <span className="is-link has-text-weight-bold">{`isOwner: ${isOwner}`}</span>
-          </div>
-        </div>
-
-        <div className="row mt-5">
-          <div className="navbar-end is-align-items-center">
-            <button className="button is-white connect-wallet button-container" onClick={checkContractOwner}>
-              <span className="is-link has-text-weight-bold">{'Check Contract Owner'}</span>
-            </button>
-          </div>
-          <div className="balance-box">
-            <span className="is-link has-text-weight-bold">{`Contract owner: ${contractOwner ?? ''}`}</span>
-          </div>
-        </div>
-
-        <div className="row mt-5">
-          <button className="button is-white connect-wallet button-container" onClick={sendMoneyToContract}>
-            <span className="is-link has-text-weight-bold">{'Send Money to Contract'}</span>
-          </button>
-          <input value={amountSent} onChange={onChangeAmountInEth} type="text" id="amount" />
-        </div>
-
-        <div className="row mt-5">
-          <button className="button is-white connect-wallet button-container" onClick={withdrawMoneyFromContract}>
-            <span className="is-link has-text-weight-bold">{'Withdraw Money from Contract'}</span>
-          </button>
-          <input value={amountWithdraw} onChange={onChangeWithdrawAmount} type="text" id="withdrawAmount" />
-        </div>
-      </nav> */}
+            <Input value={outEth} onChange={onChangeOutEth} />
+            {!!outEthError && <TextError>{`Error: ${outEthError}`}</TextError>}
+          </RowButtonInput>
+        )}
+        <Spacer height={10} />
+        {!!address && (
+          <Button buttonType="primary" onClick={disconnectWallet}>
+            {'Disconnect Wallet'}
+          </Button>
+        )}
+        <Spacer height={40} />
+        <Row>
+          <Image source={sepoliaLogo} alt="Sepolia Logo" />
+          <Header text="Sepolia Contract" />
+        </Row>
+        <Spacer height={4} />
+        {!!contractOwner && typeof contractOwner === 'string' && (
+          <Text>{`Contract owner: ${contractOwner?.substring(0, 6)}...${contractOwner?.substring(38)}`}</Text>
+        )}
+        <Spacer height={4} />
+        <Text>{`Contract address: ${CONTRACT_ADDRESS}`}</Text>
+        <Spacer height={4} />
+        <Text>{`Contract balance: ${
+          balanceContract && typeof balanceContract === 'bigint' ? formatEther(balanceContract) : 0
+        }`}</Text>
+        <Spacer height={4} />
+        <RowButtonInput>
+          <Button buttonType="primary" onClick={withdrawEthFromContract}>
+            {'Withdraw ETH'}
+          </Button>
+          <Input value={inEth} onChange={onChangeInEth} />
+          {!!inEthError && <TextError>{`Error: ${inEthError}`}</TextError>}
+        </RowButtonInput>
+      </Container>
     </Body>
   )
 }

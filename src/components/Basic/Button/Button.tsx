@@ -3,7 +3,7 @@ import { BaseButton } from './styles'
 
 export type ButtonType = 'primary' | 'secondary'
 
-interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   buttonType?: ButtonType
   style?: CSSProperties
 }

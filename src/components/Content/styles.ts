@@ -1,5 +1,6 @@
 import styled from 'styled-components'
-import { Text } from '../Basic'
+import { Button as ButtonComponent, ButtonProps } from '../Basic'
+import { BUTTON_WIDTH } from '../../consts/layout'
 import backgroundImage from '../../../public/backgroundImage.png'
 
 export const Body = styled.div`
@@ -17,6 +18,17 @@ export const Body = styled.div`
   overflow: hidden;
 `
 
+export const Container = styled.div`
+  display: flex;
+  flex-direction: column;
+  padding: 50px;
+`
+
+export const Button = styled(ButtonComponent)<ButtonProps>`
+  width: ${BUTTON_WIDTH};
+  margin-right: 10px;
+`
+
 export const RowBalance = styled.div`
   display: flex;
   flex-direction: row;
@@ -24,8 +36,10 @@ export const RowBalance = styled.div`
   align-items: center;
 `
 
-export const Container = styled.div`
-  padding: 30px;
+export const RowButtonInput = styled.div`
+  display: flex;
+  flex-direction: row;
+  align-items: center;
 `
 
 export const TextBalance = styled.text`
@@ -33,4 +47,10 @@ export const TextBalance = styled.text`
   font-family: 'Arial', sans-serif;
   font-size: 16px;
   color: white;
+`
+
+export const TextError = styled.text`
+  color: red;
+  font-weight: bold;
+  margin-left: 10px;
 `
