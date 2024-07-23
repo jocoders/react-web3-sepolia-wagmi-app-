@@ -1,5 +1,3 @@
-Great job on your project so far! Here are some ideas to expand the functionality of your contract and frontend, which can help you delve deeper into Solidity and Wagmi:
-
 ### Contract Functionality Ideas:
 
 1. **Time-Locked Withdrawals:**
