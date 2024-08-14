@@ -6,7 +6,11 @@ interface ButtonProps {
   buttonType?: ButtonType
 }
 
-export const BaseButton = styled.button<ButtonProps>`
+const customShouldForwardProp = (prop: string) => prop !== 'buttonType'
+
+export const BaseButton = styled('button').withConfig({
+  shouldForwardProp: customShouldForwardProp
+})<ButtonProps>`
   border: none;
   border-radius: 5px;
   color: white;

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo } from 'react'
 import {
   ChainSwitcherContainer,
   RowCurrentChain,
@@ -9,17 +9,14 @@ import {
   Text
 } from './styles'
 
-type TChainSwitcherProps = {
+export type TChainSwitcherProps = {
   availableChains: { id: number; name: string }[]
   activeChainId: number
   onChangeChain: (id: number) => void
 }
 
 export const ChainSwitcher: React.FC<TChainSwitcherProps> = ({ availableChains, activeChainId, onChangeChain }) => {
-  //const [currentChain, setCurrentChain] = useState(activeChainId)
-
   const handleChainSelect = (chain: { id: number; name: string }) => {
-    //setCurrentChain(chain.id)
     onChangeChain(chain.id)
     console.log(`LOG: Switched to ${chain.name}`)
   }
