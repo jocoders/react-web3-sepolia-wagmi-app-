@@ -1,7 +1,7 @@
 import React from 'react'
 import { Button as ButtonBase, Row, Image, Header, Input, Button, Spacer } from '../Basic'
 import { Container, RowBalance, RowButtonInput, TextBalance, TextError, ButtonDisconnect } from './styles'
-import { ChainSwitcher, TChainSwitcherProps } from './ChainSwitcher/ChainSwitcher'
+import { ChainSwitcher, TChainSwitcherProps } from './ChainSwitcher'
 import metamaskLogo from '../../../public/metamask-fox.png'
 
 type TMetamaskProps = {

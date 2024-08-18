@@ -1,6 +1,6 @@
 import React from 'react'
 import { TabBarContainer, Tab } from './styles'
-import { ETabs } from '../Content/useContentController'
+import { ETabs } from '../../consts/token'
 
 interface TabBarSwitcherProps {
   activeTab: ETabs

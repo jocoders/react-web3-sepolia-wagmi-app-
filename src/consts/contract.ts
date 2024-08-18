@@ -517,14 +517,26 @@ export const UNISWAP_CONTRACT_ABI = [
   }
 ] as Abi
 
-// export const wagmiBasicContractConfig = {
-//   address: BASIC_CONTRACT_ADDRESS,
-//   abi: BASIC_CONTRACT_ABI,
-//   chainId: 11155111
-// }
-
-// export const wagmiUniswapContractConfig = {
-//   address: UNISWAP_CONTRACT_ADDRESS,
-//   abi: UNISWAP_CONTRACT_ABI,
-//   chainId: 11155111
-// }
+export const ERC20_ABI = [
+  {
+    constant: false,
+    inputs: [
+      {
+        name: '_spender',
+        type: 'address'
+      },
+      {
+        name: '_value',
+        type: 'uint256'
+      }
+    ],
+    name: 'approve',
+    outputs: [
+      {
+        name: '',
+        type: 'bool'
+      }
+    ],
+    type: 'function'
+  }
+]

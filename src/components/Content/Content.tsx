@@ -23,16 +23,18 @@ export function Content() {
     isActiveUniswap,
     outEth,
     outEthError,
+    swapError,
     tabs,
 
+    clearSwapError,
     connectWallet,
     disconnectWallet,
     withdrawEthFromContract,
     sendEthToContract,
+    onSwap,
     onChangeOutEth,
     onChangeInEth,
     onChangeChain,
-    onSwap,
     setActiveTab
   } = useContentController()
 
@@ -56,7 +58,9 @@ export function Content() {
         <TabBarSwitcher activeTab={activeTab} tabs={tabs} onChangeTab={setActiveTab} />
         <Spacer height={20} />
 
-        {isActiveUniswap && <ContractUniswap tokens={customTokens} onSwap={onSwap} />}
+        {isActiveUniswap && (
+          <ContractUniswap error={swapError} tokens={customTokens} clearSwapError={clearSwapError} onSwap={onSwap} />
+        )}
         {isActiveBasic && (
           <ContractBase
             contractOwner={contractOwner as string}

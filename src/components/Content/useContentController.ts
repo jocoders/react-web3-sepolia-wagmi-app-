@@ -10,7 +10,7 @@ import {
   simulateContract,
   getBalance
 } from '@wagmi/core'
-import { parseEther } from 'viem'
+import { Abi, parseEther } from 'viem'
 
 import { injected } from 'wagmi/connectors'
 import { config } from '../../config'
@@ -19,12 +19,14 @@ import {
   BASIC_CONTRACT_ADDRESS,
   BASIC_CONTRACT_ABI,
   UNISWAP_CONTRACT_ADDRESS,
-  UNISWAP_CONTRACT_ABI
+  UNISWAP_CONTRACT_ABI,
+  ERC20_ABI
 } from '../../consts/contract'
 import { TABS, ETabs } from '../../consts/token'
 import { useCustomTokensBalance } from '../../hooks/useSwapTokenBalance'
 import { ESwapTokens } from '../../types/swap'
 import { TSwapParams } from '../ContractUniswap/ContractUniswap'
+import { useCheckAllowance } from '../../hooks/useCheckAllowance'
 
 export function useContentController() {
   const chains = getChains(config)
@@ -38,6 +40,7 @@ export function useContentController() {
   const [balanceContract, setBalanceContract] = useState('')
   const [balanceWallet, setBalanceWallet] = useState('')
   const [transactionHash, setTransactionHash] = useState('')
+  const [swapError, setSwapError] = useState('')
 
   const isActiveBasic = activeTab === ETabs.BASE_CONTRACT
   const isActiveUniswap = activeTab === ETabs.UNISWAP_CONTRACT
@@ -46,6 +49,10 @@ export function useContentController() {
   const { connect } = useConnect()
   const { galBalance, jocBalance, wethBalance } = useCustomTokensBalance(address as `0x${string}`)
   const { writeContract } = useWriteContract()
+
+  const galAllowance = useCheckAllowance(ESwapTokens.GAL, address as `0x${string}`)
+  const jocAllowance = useCheckAllowance(ESwapTokens.JOC, address as `0x${string}`)
+  const wethAllowance = useCheckAllowance(ESwapTokens.WETH, address as `0x${string}`)
 
   useEffect(() => {
     const getBalanceContract = async () => {
@@ -69,6 +76,25 @@ export function useContentController() {
     }
   }, [address, transactionHash])
 
+  const { data: galAddress } = useReadContract({
+    address: UNISWAP_CONTRACT_ADDRESS,
+    abi: UNISWAP_CONTRACT_ABI,
+    functionName: 'getTokenAddress',
+    args: [ESwapTokens.GAL]
+  })
+  const { data: jocAddress } = useReadContract({
+    address: UNISWAP_CONTRACT_ADDRESS,
+    abi: UNISWAP_CONTRACT_ABI,
+    functionName: 'getTokenAddress',
+    args: [ESwapTokens.JOC]
+  })
+  const { data: wethAddress } = useReadContract({
+    address: UNISWAP_CONTRACT_ADDRESS,
+    abi: UNISWAP_CONTRACT_ABI,
+    functionName: 'getTokenAddress',
+    args: [ESwapTokens.WETH]
+  })
+
   useWatchContractEvent({
     address: BASIC_CONTRACT_ADDRESS as `0x${string}`,
     abi: BASIC_CONTRACT_ABI,
@@ -87,6 +113,34 @@ export function useContentController() {
       setTransactionHash(logs[0].transactionHash ?? '')
     }
   })
+
+  const increaseAllowance = async (tokenAddress: string, amount: bigint) => {
+    const { request } = await simulateContract(config, {
+      abi: ERC20_ABI as Abi,
+      address: tokenAddress as `0x${string}`,
+      functionName: 'approve',
+      args: [UNISWAP_CONTRACT_ADDRESS, amount]
+    })
+
+    await writeContract(request)
+  }
+
+  const upAllowance = async (token: string, amount: bigint) => {
+    let allowance = galAllowance
+    let tokenAddress = galAddress
+
+    if (token === ESwapTokens.JOC) {
+      allowance = jocAllowance
+      tokenAddress = jocAddress
+    } else if (token === ESwapTokens.WETH) {
+      allowance = wethAllowance
+      tokenAddress = wethAddress
+    }
+
+    if (typeof tokenAddress === 'string' && typeof allowance === 'bigint' && allowance < amount) {
+      await increaseAllowance(tokenAddress, amount - allowance)
+    }
+  }
 
   const { data: contractOwner } = useReadContract({
     address: BASIC_CONTRACT_ADDRESS as `0x${string}`,
@@ -122,20 +176,61 @@ export function useContentController() {
     await disconnect(config)
   }
 
+  const checkSwapParams = (params: TSwapParams) => {
+    const { fromToken, toToken, fromAmount, toAmount } = params
+    if (fromAmount <= 0 || toAmount <= 0) {
+      setSwapError('Amounts must be greater than 0')
+      return false
+    } else if (fromToken === toToken) {
+      setSwapError('From and to tokens must be different')
+      return false
+    } else if (fromToken === ESwapTokens.ETH && fromAmount > parseEther(balanceWallet)) {
+      setSwapError('Not enough balance')
+      return false
+    }
+    return true
+  }
+
   const onSwap = async (params: TSwapParams) => {
+    if (!checkSwapParams(params)) {
+      return
+    }
+
     try {
-      const { fromToken, toToken, fromTokenAmount, toTokenAmount } = params
+      const { fromToken, toToken, fromAmount, toAmount } = params
       if (fromToken === ESwapTokens.ETH) {
         const { request } = await simulateContract(config, {
           abi: UNISWAP_CONTRACT_ABI,
           address: UNISWAP_CONTRACT_ADDRESS,
           functionName: 'swapEthToToken',
           args: [toToken],
-          value: parseEther(fromTokenAmount)
+          value: fromAmount
         })
 
-        const hash = await writeContract(request)
-        console.log('Transaction hash:', hash)
+        await writeContract(request)
+      } else if (toToken === ESwapTokens.ETH) {
+        await upAllowance(fromToken, fromAmount)
+
+        const { request } = await simulateContract(config, {
+          abi: UNISWAP_CONTRACT_ABI,
+          address: UNISWAP_CONTRACT_ADDRESS,
+          functionName: 'swapTokenToEth',
+          args: [fromToken, fromAmount]
+        })
+
+        await writeContract(request)
+      } else {
+        await upAllowance(fromToken, fromAmount)
+        await upAllowance(toToken, toAmount)
+
+        const { request } = await simulateContract(config, {
+          abi: UNISWAP_CONTRACT_ABI,
+          address: UNISWAP_CONTRACT_ADDRESS,
+          functionName: 'swapTokenToToken',
+          args: [fromToken, toToken, fromAmount]
+        })
+
+        await writeContract(request)
       }
     } catch (error) {
       console.error('Error swapping ETH to token:', error)
@@ -207,18 +302,18 @@ export function useContentController() {
     isActiveUniswap,
     outEth,
     outEthError,
+    swapError,
     tabs: TABS,
 
-    fetchTokensBalance: () => {},
-
+    clearSwapError: () => setSwapError(''),
     connectWallet,
     disconnectWallet,
     withdrawEthFromContract,
     sendEthToContract,
+    onSwap,
     onChangeOutEth,
     onChangeInEth,
     onChangeChain,
-    onSwap,
     setActiveTab
   }
 }
